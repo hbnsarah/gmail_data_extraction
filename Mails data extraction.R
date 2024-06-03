@@ -1,0 +1,54 @@
+library(tm)
+library(stringr)
+library(stringi)
+library(lubridate)
+
+setwd("~/R/Mails data extraction/")
+
+mbox_file <- "newsletter.mbox"
+
+# Read the mbox file
+mbox_content <- tolower(readLines(mbox_file, warn = FALSE))
+
+# Function to extract information
+extract_email_data <- function(mbox_content) {
+  
+  # Extract lines containing relevant information
+  relevant_lines <- mbox_content[grep("^(date:|subject:|from:|content-type:)", mbox_content)]
+  
+  # Extract and format date and time
+  dates_lines <- relevant_lines[grep("^date:", relevant_lines)]
+  dates <- str_extract(dates_lines, "\\d{1,2} [a-z]+ \\d{4} \\d{2}:\\d{2}:\\d{2}")
+  dates <- dmy_hms(dates)
+  
+  # Extract and clean From emails
+  from_lines <- relevant_lines[grep("^from:", relevant_lines)]
+  froms <- str_extract(from_lines, "<.+?>")
+  froms <- str_replace_all(froms, "[<>]", "")
+  
+  # Extract Subject
+  subject_lines <- relevant_lines[grep("^subject:", relevant_lines)]
+  subjects <- str_replace(subject_lines, "^subject: ", "")
+  
+  # Extract Content-Type and related text
+  content_text_lines <- mbox_content[grep("^content-type: text/html", mbox_content, fixed = TRUE)]
+  content_texts <- str_extract_all(mbox_content, "<div dir=\"ltr\">.*?</div>")
+  content_texts <- unlist(content_texts)
+  
+  # Remove HTML tags
+  content_texts <- str_remove_all(content_texts, "<.*?>")  
+  
+  
+  # Create a data frame
+  email_df <- data.frame(Date_time = dates, From = froms, Subject = subjects, Text = content_texts, stringsAsFactors = FALSE)
+  
+  return(email_df)
+}
+
+# Apply the function 
+emails_df <- extract_email_data(mbox_content)
+
+# Write to a CSV file
+timestamp <- format(Sys.time(), "%Y%m%d")
+output_filename <- paste0("newsletter_data_", timestamp, ".csv")
+write.table(emails_df, file = output_filename, sep = ",", row.names = FALSE, col.names = TRUE, quote = FALSE)
